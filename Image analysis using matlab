@@ -1,0 +1,53 @@
+trafficVid = VideoReader('traffic.mj2');
+implay('traffic.mj2');
+
+nframes = trafficVid.NumberOfFrames;
+I = read(trafficVid, 1);
+
+taggedCars = zeros([size(I,1) size(I,2) 3 nframes], class(I));
+
+% Structuring element
+se = strel('disk',3);
+
+for k = 1:nframes
+    frame = read(trafficVid, k);
+
+    % Convert to HSV for better color detection
+    hsvFrame = rgb2hsv(frame);
+
+    H = hsvFrame(:,:,1);
+    S = hsvFrame(:,:,2);
+    V = hsvFrame(:,:,3);
+
+    % Detect WHITE color (low saturation, high brightness)
+    whiteMask = (S < 0.3) & (V > 0.7);
+
+    % Clean mask
+    whiteMask = imopen(whiteMask, se);
+    whiteMask = bwareaopen(whiteMask, 200);
+
+    % Label regions
+    stats = regionprops(whiteMask, 'Centroid', 'Area');
+
+    % Copy original frame
+    taggedCars(:,:,:,k) = frame;
+
+    if ~isempty(stats)
+        areaArray = [stats.Area];
+        [~, idx] = max(areaArray);
+
+        c = round(stats(idx).Centroid);
+
+        % Boundary check (IMPORTANT FIX)
+        r = max(1, c(2)-3):min(size(frame,1), c(2)+3);
+        c_col = max(1, c(1)-3):min(size(frame,2), c(1)+3);
+
+        % Mark RED
+        taggedCars(r, c_col, 1, k) = 255;
+        taggedCars(r, c_col, 2, k) = 0;
+        taggedCars(r, c_col, 3, k) = 0;
+    end
+end
+
+% Play result
+implay(taggedCars, trafficVid.FrameRate);
